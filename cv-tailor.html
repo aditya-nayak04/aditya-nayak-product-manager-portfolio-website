@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CV Tailor — End-to-end AI Job Application Agent</title>
+  <meta name="description" content="A fully local AI agent that discovers PM roles, scores fit with Claude, tailors CVs, drafts outreach, and stops one click before submit. Built by Aditya Nayak." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ----------------------------------------------------------
+       Design tokens. Deep navy + electric cyan + warm amber. The
+       palette echoes the PM/AI feel without leaning into the
+       generic SaaS gradient look.
+       ---------------------------------------------------------- */
+    :root {
+      --bg-deep: #0a0e1a;
+      --bg-card: #111729;
+      --bg-card-2: #161e35;
+      --line: rgba(120, 144, 196, 0.16);
+      --line-strong: rgba(120, 144, 196, 0.32);
+      --text: #e6ecff;
+      --text-muted: #95a4c7;
+      --text-faint: #6b7896;
+      --cyan: #4cd6ff;
+      --cyan-deep: #1996c4;
+      --amber: #ffc857;
+      --green: #5fe9a1;
+      --pink: #ff7ea8;
+      --violet: #a78bfa;
+      --shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.6);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background:
+        radial-gradient(1200px 600px at 10% -5%, rgba(76, 214, 255, 0.10), transparent 60%),
+        radial-gradient(900px 500px at 95% 10%, rgba(167, 139, 250, 0.08), transparent 65%),
+        radial-gradient(700px 700px at 50% 110%, rgba(255, 200, 87, 0.05), transparent 70%),
+        var(--bg-deep);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-feature-settings: 'cv11', 'ss01';
+      line-height: 1.55;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    code, .mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
+
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+    /* ---------- Hero ---------- */
+    header.hero {
+      padding: 96px 0 72px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-grid {
+      position: absolute; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(120,144,196,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120,144,196,0.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 75%);
+    }
+    .hero-inner { position: relative; z-index: 1; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: rgba(76, 214, 255, 0.06);
+      color: var(--cyan);
+      font-size: 12px; letter-spacing: 0.18em; font-weight: 600;
+      text-transform: uppercase;
+    }
+    .eyebrow .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(95, 233, 161, 0.18);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    h1.title {
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 1.04;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 22px 0 14px;
+      max-width: 18ch;
+      background: linear-gradient(180deg, #ffffff 0%, #b8c5e8 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    h1.title .accent {
+      background: linear-gradient(120deg, var(--cyan), var(--amber));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.lede {
+      font-size: clamp(16px, 1.6vw, 19px);
+      color: var(--text-muted);
+      max-width: 70ch;
+      margin: 0;
+    }
+    .hero-meta {
+      margin-top: 28px;
+      display: flex; flex-wrap: wrap; gap: 14px 22px;
+      color: var(--text-faint);
+      font-size: 13px;
+    }
+    .hero-meta b { color: var(--text); font-weight: 600; }
+
+    /* ---------- Stat strip ---------- */
+    .stats {
+      margin-top: 56px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .stat {
+      padding: 20px 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--bg-card), var(--bg-card-2));
+      border-radius: 16px;
+    }
+    .stat .num {
+      font-size: 32px; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(120deg, var(--cyan), var(--amber));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat .lbl {
+      font-size: 12px; color: var(--text-faint);
+      text-transform: uppercase; letter-spacing: 0.12em; margin-top: 6px;
+    }
+    @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ---------- Section scaffold ---------- */
+    section.block { padding: 88px 0; border-top: 1px solid var(--line); }
+    section.block h2 {
+      font-size: clamp(28px, 3.4vw, 40px);
+      letter-spacing: -0.01em;
+      margin: 0 0 14px;
+      font-weight: 800;
+    }
+    section.block .kicker {
+      font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--cyan); font-weight: 700; margin-bottom: 6px;
+    }
+    section.block p.intro {
+      color: var(--text-muted); max-width: 68ch; margin: 0 0 40px;
+      font-size: 16.5px;
+    }
+
+    /* ---------- Flow ---------- */
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+      counter-reset: step;
+    }
+    @media (max-width: 980px) { .flow { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+    .step {
+      counter-increment: step;
+      padding: 22px 18px 20px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--bg-card), rgba(17, 23, 41, 0.6));
+      border-radius: 14px;
+      position: relative;
+      min-height: 188px;
+      transition: border-color 200ms ease, transform 200ms ease;
+    }
+    .step:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+    .step::before {
+      content: counter(step, decimal-leading-zero);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      letter-spacing: 0.18em;
+    }
+    .step h4 {
+      margin: 8px 0 8px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.005em;
+    }
+    .step p {
+      margin: 0; color: var(--text-muted);
+      font-size: 13px; line-height: 1.5;
+    }
+    .step .glyph {
+      position: absolute; right: 14px; top: 18px;
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      border-radius: 8px;
+      background: rgba(76, 214, 255, 0.08);
+      color: var(--cyan);
+    }
+
+    /* ---------- Architecture diagram ---------- */
+    .arch {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+    .layer {
+      grid-column: span 12;
+      display: grid; grid-template-columns: 200px 1fr; gap: 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, var(--bg-card), rgba(17, 23, 41, 0.6));
+    }
+    .layer .layer-tag {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 14px;
+      border-right: 1px solid var(--line);
+      align-self: stretch;
+    }
+    .layer .layer-tag .num {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--cyan); font-size: 11px; letter-spacing: 0.16em;
+    }
+    .layer .layer-tag .name {
+      font-size: 18px; font-weight: 700;
+    }
+    .layer .layer-tag .blurb {
+      font-size: 12px; color: var(--text-faint); line-height: 1.45; margin-top: 4px;
+    }
+    .pills {
+      display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+      padding: 10px 4px;
+    }
+    .pill {
+      padding: 7px 12px;
+      border: 1px solid var(--line-strong);
+      background: rgba(76, 214, 255, 0.04);
+      border-radius: 999px;
+      font-size: 12.5px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .pill.am { color: var(--amber); border-color: rgba(255, 200, 87, 0.32); background: rgba(255, 200, 87, 0.06); }
+    .pill.gn { color: var(--green); border-color: rgba(95, 233, 161, 0.32); background: rgba(95, 233, 161, 0.06); }
+    .pill.pk { color: var(--pink); border-color: rgba(255, 126, 168, 0.32); background: rgba(255, 126, 168, 0.06); }
+    .pill.vi { color: var(--violet); border-color: rgba(167, 139, 250, 0.32); background: rgba(167, 139, 250, 0.06); }
+    @media (max-width: 720px) {
+      .layer { grid-template-columns: 1fr; }
+      .layer .layer-tag { border-right: none; border-bottom: 1px solid var(--line); }
+    }
+
+    /* ---------- Guardrail callouts ---------- */
+    .guards {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+    @media (max-width: 880px) { .guards { grid-template-columns: 1fr; } }
+    .guard {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, var(--bg-card), rgba(17, 23, 41, 0.55));
+    }
+    .guard h4 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .guard h4 .ic {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: grid; place-items: center;
+      background: rgba(76, 214, 255, 0.08);
+      color: var(--cyan);
+    }
+    .guard p { color: var(--text-muted); margin: 0; font-size: 13.5px; }
+
+    /* ---------- Training loop ---------- */
+    .train {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: center;
+    }
+    @media (max-width: 880px) { .train { grid-template-columns: 1fr; } }
+    .train .card {
+      padding: 28px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--bg-card), rgba(17, 23, 41, 0.55));
+      border-radius: 16px;
+    }
+    .train ul {
+      margin: 14px 0 0; padding-left: 18px;
+      color: var(--text-muted); font-size: 14px;
+    }
+    .train ul li { margin-bottom: 8px; }
+
+    /* ---------- Footer ---------- */
+    footer.foot {
+      padding: 40px 0 64px;
+      color: var(--text-faint);
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .foot .row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+    /* ---------- Animation: gentle reveal on scroll ---------- */
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity 700ms ease, transform 700ms ease; }
+    .reveal.in { opacity: 1; transform: none; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="wrap hero-inner">
+      <span class="eyebrow"><span class="dot"></span>Live, fully local, running on a MacBook Air M3</span>
+      <h1 class="title">An <span class="accent">end to end AI agent</span> for senior PM job applications.</h1>
+      <p class="lede">
+        CV Tailor discovers PM roles across Naukri and LinkedIn, scores each
+        one against my master CV with a guard railed Claude analyst, tailors
+        the CV and a hiring manager email, and stops exactly one click before
+        submit. Every artefact lives on disk. No paid APIs in the loop.
+      </p>
+      <div class="hero-meta">
+        <span><b>Built by</b> Aditya Nayak</span>
+        <span><b>Stack</b> FastAPI · Next.js · Claude · Local LLMs · ChromaDB · Playwright</span>
+        <span><b>Status</b> production grade, 384+ tests</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="num">5</div>
+          <div class="lbl">Pipeline phases, all observable</div>
+        </div>
+        <div class="stat">
+          <div class="num">3×</div>
+          <div class="lbl">Parallel analyst + integrate workers</div>
+        </div>
+        <div class="stat">
+          <div class="num">2 keys</div>
+          <div class="lbl">Approval gate before any submit</div>
+        </div>
+        <div class="stat">
+          <div class="num">0</div>
+          <div class="lbl">Outbound API spend</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- =================== USER FLOW =================== -->
+    <section class="block reveal" id="flow">
+      <div class="kicker">User flow</div>
+      <h2>From a typed keyword to a queued application, in five hops.</h2>
+      <p class="intro">
+        I press Start in the dashboard. A controller subprocess fans out
+        scrapers, an analyst worker, and a score worker. Each stage writes a
+        small JSON artefact to disk so the next stage can pick it up
+        independently. The whole thing is restart safe.
+      </p>
+
+      <div class="flow">
+        <div class="step">
+          <span class="glyph">⚲</span>
+          <h4>Discover</h4>
+          <p>Playwright scrapes Naukri and LinkedIn with stealth flags so Akamai does not flag the session. Listings dedupe across runs via a stable hash.</p>
+        </div>
+        <div class="step">
+          <span class="glyph">∿</span>
+          <h4>Enrich</h4>
+          <p>Each card gets a JD body fetch, location and work mode parse, post date normalise, and an Apollo plus Hunter contact resolver for the hiring manager.</p>
+        </div>
+        <div class="step">
+          <span class="glyph">⌬</span>
+          <h4>Score</h4>
+          <p>Six component ATS scorer (TF IDF, semantic via MiniLM, skills, seniority, years of experience, role match) writes a row to the day's xlsx and an inbox task for Claude.</p>
+        </div>
+        <div class="step">
+          <span class="glyph">✦</span>
+          <h4>Tailor</h4>
+          <p>Headless Claude reads the JD, scores against master_cv.json, and writes master_fit, tailoring_plan, tailored_cv_delta and tailored_fit. Cover letter too if a real recruiter email exists.</p>
+        </div>
+        <div class="step">
+          <span class="glyph">◈</span>
+          <h4>Render</h4>
+          <p>Three integrators run in parallel. Each renders a tailored PDF with fpdf2, drafts the .eml with the PDF attached, and updates the xlsx row.</p>
+        </div>
+        <div class="step">
+          <span class="glyph">⛨</span>
+          <h4>Approve</h4>
+          <p>Nothing ships until I tick the per row Approve box AND set CV_AGENT_ENABLE_AUTO_SUBMIT=true. Two keys. Belt and braces.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== ARCHITECTURE =================== -->
+    <section class="block reveal" id="architecture">
+      <div class="kicker">Architecture</div>
+      <h2>A queue between every stage. A guardrail at every model call.</h2>
+      <p class="intro">
+        The system is a stack of small workers, each pulling from a
+        filesystem queue and writing artefacts the next worker can read. It
+        runs entirely on my laptop and is observable from the Next.js
+        dashboard at every step.
+      </p>
+
+      <div class="arch">
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L1</span>
+            <span class="name">Discovery</span>
+            <span class="blurb">Headed Playwright with anti bot stealth. Naukri and LinkedIn scrapers run as separate subprocesses with their own retry budget.</span>
+          </div>
+          <div class="pills">
+            <span class="pill">Playwright</span>
+            <span class="pill">Akamai stealth bundle</span>
+            <span class="pill">Cookie cleaner</span>
+            <span class="pill">Naukri scraper</span>
+            <span class="pill">LinkedIn scraper</span>
+            <span class="pill">Per keyword pass cascade</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L2</span>
+            <span class="name">Enrichment</span>
+            <span class="blurb">JD body fetch, location and work mode parse, post date normalise, hiring manager email resolver.</span>
+          </div>
+          <div class="pills">
+            <span class="pill">JD body fetcher</span>
+            <span class="pill">Apollo two step</span>
+            <span class="pill">Hunter pattern fallback</span>
+            <span class="pill">SMTP MX verifier</span>
+            <span class="pill">Domain freshness cache</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L3</span>
+            <span class="name">Scoring &amp; dedupe</span>
+            <span class="blurb">Six component ATS scorer plus semantic dedupe to avoid pinging Claude on a JD I already processed.</span>
+          </div>
+          <div class="pills">
+            <span class="pill">TF IDF match</span>
+            <span class="pill">Semantic via MiniLM</span>
+            <span class="pill">Skills overlap</span>
+            <span class="pill">Seniority calibration</span>
+            <span class="pill">YoE check</span>
+            <span class="pill">ChromaDB dedupe</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L4</span>
+            <span class="name">Analyst (LLM)</span>
+            <span class="blurb">Headless Claude in a subprocess. 3 in parallel. Fallback to local Mistral or Qwen via LM Studio when I am training the gold set.</span>
+          </div>
+          <div class="pills">
+            <span class="pill am">Claude headless analyst</span>
+            <span class="pill am">Local Mistral 7B</span>
+            <span class="pill am">Local Qwen 14B</span>
+            <span class="pill am">RAG via top k gold cases</span>
+            <span class="pill am">Five layer anti hallucination</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L5</span>
+            <span class="name">Render &amp; deliver</span>
+            <span class="blurb">CV PDF render, cover letter eml staging, optional Gmail draft. ATS adapters for Lever and Workday with CAPTCHA pause.</span>
+          </div>
+          <div class="pills">
+            <span class="pill gn">fpdf2 PDF render</span>
+            <span class="pill gn">Cover letter eml</span>
+            <span class="pill gn">Gmail OAuth draft</span>
+            <span class="pill gn">Lever adapter</span>
+            <span class="pill gn">Workday adapter</span>
+            <span class="pill gn">CAPTCHA detect</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-tag">
+            <span class="num">L6</span>
+            <span class="name">Control plane</span>
+            <span class="blurb">FastAPI surface and a Next.js dashboard. Approve box, two key gate, run controller, log stream, JD archive viewer.</span>
+          </div>
+          <div class="pills">
+            <span class="pill vi">FastAPI</span>
+            <span class="pill vi">Next.js 14</span>
+            <span class="pill vi">TypeScript</span>
+            <span class="pill vi">Run state machine</span>
+            <span class="pill vi">JD archive HTML</span>
+            <span class="pill vi">Per row approve</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =================== GUARDRAILS =================== -->
+    <section class="block reveal" id="guardrails">
+      <div class="kicker">Safety &amp; correctness</div>
+      <h2>Five layers between the model and the recruiter's inbox.</h2>
+      <p class="intro">
+        A senior PM CV cannot be a hallucination. Every model output passes
+        through evidence checks before it touches the PDF, and nothing leaves
+        the laptop without two explicit keys.
+      </p>
+
+      <div class="guards">
+        <div class="guard">
+          <h4><span class="ic">①</span>Evidence only</h4>
+          <p>Skills, metrics, employers and tools must already exist in master_cv.json. Anything else gets dropped by a post filter, not asked again.</p>
+        </div>
+        <div class="guard">
+          <h4><span class="ic">②</span>Banned phrase scrubber</h4>
+          <p>Generic LLM tells like "data driven decisions" or "results driven leader" never reach the PDF. The list grows whenever I spot a new tell.</p>
+        </div>
+        <div class="guard">
+          <h4><span class="ic">③</span>Numeric guard</h4>
+          <p>Every percentage, count and currency figure must round trip back to a number that exists in the master CV. No invented metrics.</p>
+        </div>
+        <div class="guard">
+          <h4><span class="ic">④</span>Two key submit gate</h4>
+          <p>An application ships only when the per row Approve checkbox is on AND the global env flag is true. Either alone is a no op.</p>
+        </div>
+        <div class="guard">
+          <h4><span class="ic">⑤</span>384+ assertion tests</h4>
+          <p>Hard guarantees. No submits in dry run. No live email sends in tests. No full secrets logged. CI fails loudly.</p>
+        </div>
+        <div class="guard">
+          <h4><span class="ic">⑥</span>JD archive trail</h4>
+          <p>Every JD body, every score, every tailored output is preserved in dated HTML and JSONL. Any decision can be traced back to its evidence.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== TRAINING LOOP =================== -->
+    <section class="block reveal" id="training">
+      <div class="kicker">Local LLM training</div>
+      <h2>The Claude runs are also a labelled gold set for the local model.</h2>
+      <p class="intro">
+        Each Claude analysis is appended to a curated gold set under
+        data/gold/. The local Mistral and Qwen analysts then learn from those
+        examples, and once their scores agree with Claude's on a sample, the
+        local model can take over. The whole loop runs on my laptop.
+      </p>
+      <div class="train">
+        <div class="card">
+          <h3 style="margin:0 0 6px; font-size:16px;">Gold set as the training signal</h3>
+          <p style="margin:0; color: var(--text-muted); font-size: 14px;">Every Claude run yields a labelled triple of JD plus master CV plus tailored output. That is the training data.</p>
+          <ul>
+            <li>Append on success, never on mismatch noise.</li>
+            <li>Top k gold cases retrieved per new JD via MiniLM embeddings.</li>
+            <li>Few shot prompt for the local LLM is rebuilt from the freshest cases.</li>
+            <li>A quality gate compares the local output to Claude's score on a held out sample before promoting.</li>
+            <li>When the gate stays green for N runs, the local LLM owns the path. Claude becomes the audit trail.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 6px; font-size:16px;">What I am tuning for</h3>
+          <p style="margin:0; color: var(--text-muted); font-size: 14px;">PM voice, Indian English register, evidence first sentences, and tight bullet rewrites that do not invent.</p>
+          <ul>
+            <li>Headline that echoes the JD's seniority, never promotes beyond it.</li>
+            <li>Summary opener that maps my closest analog to the JD's first concern.</li>
+            <li>Skills reordered around the JD top keywords, drawn only from CV evidence.</li>
+            <li>Bullet priority per company, not bullet rewrite, to keep numbers honest.</li>
+            <li>Cover letter open that quotes a concrete metric from CV evidence.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <div class="wrap row">
+      <span>Built by Aditya Nayak. Senior Product Manager. Bengaluru.</span>
+      <span>The agent itself runs locally on a MacBook Air M3. Live demo on request during interviews.</span>
+    </div>
+  </footer>
+
+  <script>
+    /* Gentle scroll reveal so the page feels alive without flashy
+       animations. Falls back to "always visible" if IntersectionObserver
+       is missing. */
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+</html>
