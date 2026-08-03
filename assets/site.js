@@ -199,6 +199,7 @@ document.addEventListener('click',e=>{
 initSwiper('sw0',4800);
 initSwiper('sw1',5400);
 initSwiper('sw2',4600);
+initSwiper('sw3',5200);
 
 // Scroll reveal
 const srObs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');}),{threshold:.07,rootMargin:'0px 0px -30px 0px'});
@@ -213,7 +214,8 @@ if (origSwitch) {
         const r = el.getBoundingClientRect();
         if (r.top < window.innerHeight && r.bottom > 0) el.classList.add('in');
       });
-      const sw = ['sw0', 'sw1', 'sw2'][idx];
+      // Tab order: NextJobMate (sw3), Tricket (sw0), AI engine (sw1), T-Coin (sw2)
+      const sw = ['sw3', 'sw0', 'sw1', 'sw2'][idx];
       if (sw && swipers[sw]) swipers[sw].startAuto();
     }, 80);
   };
